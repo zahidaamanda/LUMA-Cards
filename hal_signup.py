@@ -3,7 +3,6 @@ from kivy.properties import StringProperty
 from kivy.lang import Builder
 from kivy.app import App
 
-# KV String untuk HalSignup - Disesuaikan sama dengan HalLogin
 KV_SIGNUP = '''
 <ImageButton@Button>:
     color: 1, 1, 1, 1
@@ -160,4 +159,5 @@ class HalSignup(Screen):
             if self.manager:
                 self.manager.current = 'biodata'
         else:
+
             self.signup_status = "Cannot create an account. Try another username."
