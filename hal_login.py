@@ -3,7 +3,6 @@ from kivy.properties import StringProperty
 from kivy.lang import Builder
 from kivy.app import App
 
-# KV String untuk HalLogin
 KV_LOGIN = '''
 # Custom Widget Definitions
 <TransparentButton@Button>:
@@ -177,4 +176,5 @@ class HalLogin(Screen):
             if self.manager:
                 self.manager.current = 'card'
         else:
+
             self.login_status = "Username or password is wrong!"
