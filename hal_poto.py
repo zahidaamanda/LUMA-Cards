@@ -8,7 +8,6 @@ from plyer import filechooser
 import os
 from kivy.app import App
 
-# KV String untuk HalPoto
 KV_POTO = '''
 <ImageButton@Button>:
     color: 1, 1, 1, 1
@@ -301,4 +300,5 @@ class HalPoto(Screen):
     def go_to_login(self):
         """Pindah ke screen login"""
         if self.manager:
+
             self.manager.current = 'login'
