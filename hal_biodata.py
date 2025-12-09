@@ -3,7 +3,6 @@ from kivy.properties import StringProperty
 from kivy.lang import Builder
 from kivy.app import App
 
-# KV String untuk HalBiodata
 KV_BIODATA = '''
 <BiodataTextInput@TextInput>:
     background_normal: ''
@@ -224,3 +223,4 @@ class HalBiodata(Screen):
                 self.manager.current = 'poto'
         else:
             self.biodata_status = "Failed to save biodata!"
+
