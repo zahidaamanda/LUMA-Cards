@@ -4,9 +4,11 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.lang import Builder
 from kivy.clock import Clock
+from kivy.core.image import Image as CoreImage
 from plyer import filechooser
 import os
 from kivy.app import App
+from PIL import Image as PILImage
 
 KV_POTO = '''
 <ImageButton@Button>:
@@ -92,7 +94,6 @@ KV_POTO = '''
             pos_hint: {'x': 0.02, 'top': 0.98}
             on_press: root.go_back_to_biodata()
         
-        # Container untuk preview gambar
         ImagePreview:
             id: image_preview
             source: ''
@@ -143,11 +144,13 @@ KV_POTO = '''
 Builder.load_string(KV_POTO)
 
 class HalPoto(Screen):
-    """Screen untuk upload dan preview foto"""
+    """Screen untuk upload dan preview foto dengan validasi 3x4"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.name = 'poto'
         self.image_path = None
+        self.original_size = None
+        self.original_ratio = None
     
     def on_enter(self):
         """Dipanggil ketika screen ini aktif"""
@@ -156,6 +159,8 @@ class HalPoto(Screen):
     def reset_state(self):
         """Reset semua state ke awal"""
         self.image_path = None
+        self.original_size = None
+        self.original_ratio = None
         if hasattr(self, 'ids'):
             self.ids.image_preview.source = ''
             self.ids.image_preview.opacity = 0
@@ -167,7 +172,6 @@ class HalPoto(Screen):
     def open_file_chooser(self):
         """Buka native file chooser menggunakan Plyer"""
         try:
-            # Gunakan path default ke Pictures folder atau home directory
             initial_path = os.path.expanduser("~")
             if os.path.exists(os.path.expanduser("~/Pictures")):
                 initial_path = os.path.expanduser("~/Pictures")
@@ -187,12 +191,11 @@ class HalPoto(Screen):
         """Handle hasil pemilihan file dari Plyer"""
         if selection:
             filepath = selection[0]
-            Clock.schedule_once(lambda dt: self.load_image(filepath))
+            Clock.schedule_once(lambda dt: self.load_and_validate_image(filepath))
     
-    def load_image(self, filepath):
-        """Load dan validasi gambar"""
+    def load_and_validate_image(self, filepath):
+        """Load, validasi gambar, dan cek apakah 3x4"""
         try:
-            # Normalize path untuk menghindari masalah dengan backslash/forwardslash
             filepath = os.path.normpath(filepath)
             
             if not os.path.exists(filepath):
@@ -211,33 +214,100 @@ class HalPoto(Screen):
                 self.show_status("Maximum file size 10MB!", True)
                 return
             
-            self.image_path = filepath
-            
-            # Tampilkan preview gambar
-            self.ids.image_preview.source = filepath
-            self.ids.image_preview.opacity = 1
-            
-            self.ids.delete_button.disabled = False
-            self.ids.save_button.disabled = False
-            
-            self.show_status("Photo was successfully selected!", False)
-            
-            print(f"✓ Gambar dipilih: {filepath}")
+            # Baca dimensi gambar
+            try:
+                with PILImage.open(filepath) as img:
+                    width, height = img.size
+                    ratio = width / height
+                    
+                    self.original_size = (width, height)
+                    self.original_ratio = ratio
+                    
+                    # Validasi rasio 3:4 (0.75 dengan toleransi ±2%)
+                    target_ratio = 3/4  # 0.75
+                    tolerance = 0.02  # 2% toleransi
+                    
+                    if abs(ratio - target_ratio) > tolerance:
+                        # Bukan foto 3x4
+                        self.show_status("Photo is not 3x4!", True)
+                        
+                        # Tampilkan preview tapi tidak valid
+                        self.image_path = None
+                        self.ids.image_preview.source = filepath
+                        self.ids.image_preview.opacity = 0.5  # Transparan karena tidak valid
+                        
+                        self.ids.delete_button.disabled = False
+                        self.ids.save_button.disabled = True
+                        return
+                    else:
+                        # Foto 3x4 valid
+                        self.image_path = filepath
+                        
+                        # Tampilkan preview gambar
+                        self.ids.image_preview.source = filepath
+                        self.ids.image_preview.opacity = 1
+                        
+                        self.ids.delete_button.disabled = False
+                        self.ids.save_button.disabled = False
+                        
+                        self.show_status("Photo was successfully selected!", False)
+                        
+            except Exception as pil_error:
+                print(f"Error membaca gambar dengan PIL: {pil_error}")
+                # Fallback ke Kivy
+                self.load_image_fallback(filepath)
             
         except Exception as e:
-            print(f"✗ Error loading image: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"✗ Error loading/validating image: {e}")
             self.show_status("Failed to load image", True)
+    
+    def load_image_fallback(self, filepath):
+        """Fallback method jika PIL tidak tersedia"""
+        try:
+            core_img = CoreImage(filepath)
+            width = core_img.width
+            height = core_img.height
+            ratio = width / height
+            
+            self.original_size = (width, height)
+            self.original_ratio = ratio
+            
+            # Validasi rasio 3:4
+            target_ratio = 3/4
+            tolerance = 0.02
+            
+            if abs(ratio - target_ratio) > tolerance:
+                # Bukan foto 3x4
+                self.show_status("Photo is not 3x4!", True)
+                
+                self.image_path = None
+                self.ids.image_preview.source = filepath
+                self.ids.image_preview.opacity = 0.5
+                
+                self.ids.delete_button.disabled = False
+                self.ids.save_button.disabled = True
+                return
+            else:
+                # Foto 3x4 valid
+                self.image_path = filepath
+                
+                self.ids.image_preview.source = filepath
+                self.ids.image_preview.opacity = 1
+                
+                self.ids.delete_button.disabled = False
+                self.ids.save_button.disabled = False
+                
+                self.show_status("Photo was successfully selected!", False)
+                
+        except Exception as e:
+            print(f"✗ Error in fallback image loading: {e}")
+            self.show_status("Failed to read image", True)
     
     def delete_image(self):
         """Hapus gambar yang sudah dipilih"""
-        if self.image_path:
-            self.reset_state()
-            self.show_status("Photo was successfully deleted", False)
-            print("✓ Gambar dihapus")
-        else:
-            self.show_status("There are no photo to delete", True)
+        self.reset_state()
+        self.show_status("Photo was successfully deleted", False)
+        print("✓ Gambar dihapus")
     
     def show_status(self, message, is_error=True):
         """Tampilkan pesan status sementara"""
@@ -259,6 +329,15 @@ class HalPoto(Screen):
             self.show_status("Please choose a photo first!", True)
             return
         
+        # Validasi ulang rasio sebelum save
+        if self.original_ratio:
+            target_ratio = 3/4
+            tolerance = 0.02
+            
+            if abs(self.original_ratio - target_ratio) > tolerance:
+                self.show_status("Photo is not 3x4!", True)
+                return
+        
         # Dapatkan username dari screen signup
         signup_screen = self.manager.get_screen('signup')
         username = signup_screen.current_username
@@ -270,15 +349,12 @@ class HalPoto(Screen):
         # Dapatkan instance database dari App
         app = App.get_running_app()
         
-        # Simpan foto ke database (akan disalin ke folder aplikasi)
+        # Simpan foto ke database
         saved_photo_path = app.db.update_photo(username, self.image_path)
         
         if saved_photo_path:
             # Lengkapi registrasi
             app.db.complete_registration(username)
-            
-            print(f"✓ Semua data disimpan untuk user: {username}")
-            print(f"  Foto disimpan di: {saved_photo_path}")
             
             # Reset form login
             try:
@@ -300,5 +376,4 @@ class HalPoto(Screen):
     def go_to_login(self):
         """Pindah ke screen login"""
         if self.manager:
-
             self.manager.current = 'login'
